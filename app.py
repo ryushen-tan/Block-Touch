@@ -21,11 +21,20 @@ from ursina.prefabs.first_person_controller import FirstPersonController
 
 import copy
 
+import mouse as m
+
+
 handDetectionOpen = True
 previousDragCord: tuple = None
 playerRotation = None
 SENS = 0.75
+
 placeBlock = False
+
+currentSpeed = 0
+MAX_SPEED = 0.05
+
+
 
 def hand_detection():
     main()
@@ -34,7 +43,7 @@ def get_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--device", type=int, default=0)
-    parser.add_argument("--width", help='cap width', type=int, default=960)
+    parser.add_argument("--width", help='cap width', type=int, default=600)
     parser.add_argument("--height", help='cap height', type=int, default=540)
 
     parser.add_argument('--use_static_image_mode', action='store_true')
@@ -75,7 +84,7 @@ def main():
     mp_hands = mp.solutions.hands
     hands = mp_hands.Hands(
         static_image_mode=use_static_image_mode,
-        max_num_hands=2,
+        max_num_hands=1,
         min_detection_confidence=min_detection_confidence,
         min_tracking_confidence=min_tracking_confidence,
     )
@@ -148,7 +157,7 @@ def main():
                 # Landmark calculation
                 landmark_list = calc_landmark_list(debug_image, hand_landmarks)
 
-
+                
                 # Conversion to relative coordinates / normalized coordinates
                 pre_processed_landmark_list = pre_process_landmark(
                     landmark_list)
@@ -158,12 +167,15 @@ def main():
                 logging_csv(number, mode, pre_processed_landmark_list,
                             pre_processed_point_history_list)
 
+                #Left or Right Handed 
+                isRightHand = str(handedness).lower().__contains__('right')
+
                 # Hand sign classification
                 hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
                 if hand_sign_id == 2:  # Point gesture
                     if oldHand != hand_sign_id:
-                        global placeBlock
-                        placeBlock = True
+                            # left click
+                            m.click('left')
                     point_history.append(landmark_list[8])
                 else:
                     point_history.append([0, 0])
@@ -174,31 +186,43 @@ def main():
                     statusCTO = False
 
                 global previousDragCord
+                global currentSpeed
                 # 0-open 1-close
                 if oldHand != hand_sign_id:
                     if oldHand == 0 and hand_sign_id == 1:
                         # print("open to close")
-                        openToClose = (int(brect[0] + ((brect[2] - brect[0]) / 2)), int(brect[1] + ((brect[3] - brect[1]) / 2)))
-                        previousDragCord = None
+                        if isRightHand:
+                            openToClose = (int(brect[0] + ((brect[2] - brect[0]) / 2)), int(brect[1] + ((brect[3] - brect[1]) / 2)))
+                            previousDragCord = None
+                        else:
+                            currentSpeed = MAX_SPEED
                         # print(openToClose)
                         statusOTC = not statusOTC
+                        
                     elif oldHand == 1 and hand_sign_id == 0:
                         # print("close to open")
-                        closeToOpen = (int(brect[0] + ((brect[2] - brect[0]) / 2)), int(brect[1] + ((brect[3] - brect[1]) / 2)))
-                        previousDragCord = None
+                        if isRightHand:
+                            closeToOpen = (int(brect[0] + ((brect[2] - brect[0]) / 2)), int(brect[1] + ((brect[3] - brect[1]) / 2)))
+                            previousDragCord = None
+                        else:
+                            currentSpeed = 0
                         # print(closeToOpen)
                         statusCTO = not statusCTO
+                        
 
                     oldHand = hand_sign_id
                 elif oldHand == 1 and oldHand == hand_sign_id:
                         # print("dragging")
                         #MAIN CHANGES
-                        dragging = (int(brect[0] + ((brect[2] - brect[0]) / 2)), int(brect[1] + ((brect[3] - brect[1]) / 2)))
-                        global playerRotation
-                        if previousDragCord and playerRotation:
-                            playerRotation.y += int((dragging[0] - previousDragCord[0]) * SENS)
-                            playerRotation.x += int((dragging[1] - previousDragCord[1]) * SENS)
-                        previousDragCord = dragging
+                        
+                        if isRightHand:
+                            global playerRotation
+                            dragging = (int(brect[0] + ((brect[2] - brect[0]) / 2)), int(brect[1] + ((brect[3] - brect[1]) / 2)))
+                            if previousDragCord and playerRotation:
+                                playerRotation.y += int((dragging[0] - previousDragCord[0]) * SENS)
+                                playerRotation.x += int((dragging[1] - previousDragCord[1]) * SENS)
+                            previousDragCord = dragging
+                                
 
                 if statusOTC == False and statusCTO == True:
                     statusCTO = False
@@ -207,7 +231,8 @@ def main():
                         # print("openToClose", statusOTC, " closeToOpen", statusCTO)
                         statusOTC = False
                         statusCTO = False
-                        print(distance_travelled(openToClose, closeToOpen))
+                        if(isRightHand):
+                            print(distance_travelled(openToClose, closeToOpen))
 
 
                 # Finger gesture classification
@@ -611,7 +636,9 @@ def draw_info(image, fps, mode, number):
 t1 = threading.Thread(target=hand_detection, args=())
 t1.start()
 
-app = Ursina()
+app = Ursina(
+    title='Ursina',
+    )
 
 class Voxel(Button):
     def __init__(self, position=(0,0,0)):
@@ -637,11 +664,6 @@ class Voxel(Button):
             
             if key == 'right mouse down':
                 destroy(self)
-            
-            global placeBlock
-            if placeBlock:
-                voxel = Voxel(position=self.position + mouse.normal)
-                placeBlock = False
 
 
 
@@ -652,14 +674,16 @@ for z in range(20):
 
 player = FirstPersonController()
 playerRotation = player.rotation
+playerPosition = player.position
 
 def update():
     global playerRotation
+    global currentSpeed
+    global placeBlock
     player.rotation_y  = playerRotation.y
     player.camera_pivot.rotation_x = playerRotation.x
-
-    global placeBlock
-    if placeBlock:
+    player.position += player.forward * currentSpeed
+            
         
 
     #player.rotation_x = 0
