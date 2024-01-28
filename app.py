@@ -159,6 +159,8 @@ def main():
                     finger_gesture_history).most_common()
 
                 # Drawing part
+                centerDot = (int(brect[0] + ((brect[2] - brect[0]) / 2)), int(brect[1] + ((brect[3] - brect[1]) / 2)))
+                cv.rectangle(debug_image, centerDot, (centerDot[0] + 10, centerDot[1] + 10), (0, 0, 0), 1)
                 debug_image = draw_bounding_rect(use_brect, debug_image, brect)
                 debug_image = draw_landmarks(debug_image, landmark_list)
                 debug_image = draw_info_text(
@@ -179,6 +181,10 @@ def main():
 
     cap.release()
     cv.destroyAllWindows()
+
+
+def distance_travelled(a: tuple, b: tuple) -> tuple:
+    return (b[0] - a[0], b[1] - a[1])
 
 
 def select_mode(key, mode):
