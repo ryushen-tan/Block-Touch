@@ -98,6 +98,8 @@ def main():
     #  ########################################################################
     mode = 0
 
+    oldHand = -1
+    
     while True:
         fps = cvFpsCalc.get()
 
@@ -145,6 +147,10 @@ def main():
                     point_history.append(landmark_list[8])
                 else:
                     point_history.append([0, 0])
+
+                if oldHand != hand_sign_id:
+                    print("changed")
+                    oldHand = hand_sign_id
 
                 # Finger gesture classification
                 finger_gesture_id = 0
