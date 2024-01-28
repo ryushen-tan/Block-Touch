@@ -76,9 +76,9 @@ def main():
     use_brect = True
 
     # Camera preparation ###############################################################
-    cap = cv.VideoCapture(cap_device)
-    cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
-    cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
+    cap = cv.VideoCapture(2)
+    cap.set(cv.CAP_PROP_FRAME_WIDTH, 200)
+    cap.set(cv.CAP_PROP_FRAME_HEIGHT, 200)
 
     # Model load #############################################################
     mp_hands = mp.solutions.hands
@@ -138,7 +138,7 @@ def main():
         ret, image = cap.read()
         if not ret:
             break
-        image = cv.flip(image, 1)  # Mirror display
+        #image = cv.flip(image, 1)  # Mirror display
         debug_image = copy.deepcopy(image)
 
         # Detection implementation #############################################################
