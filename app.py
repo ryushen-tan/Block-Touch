@@ -149,18 +149,23 @@ def main():
                     point_history.append(landmark_list[8])
                 else:
                     point_history.append([0, 0])
+                
+                # if any movements come in between them, reset 
+                if hand_sign_id != 0 and hand_sign_id != 1:
+                    statusOTC = False
+                    statusCTO = False
 
                 # 0-open 1-close
                 if oldHand != hand_sign_id:
                     if oldHand == 0 and hand_sign_id == 1:
-                        print("open to close")
+                        # print("open to close")
                         openToClose = (int(brect[0] + ((brect[2] - brect[0]) / 2)), int(brect[1] + ((brect[3] - brect[1]) / 2)))
-                        print(openToClose)
+                        # print(openToClose)
                         statusOTC = not statusOTC
                     elif oldHand == 1 and hand_sign_id == 0:
-                        print("close to open")
+                        # print("close to open")
                         closeToOpen = (int(brect[0] + ((brect[2] - brect[0]) / 2)), int(brect[1] + ((brect[3] - brect[1]) / 2)))
-                        print(closeToOpen)
+                        # print(closeToOpen)
                         statusCTO = not statusCTO
 
                     oldHand = hand_sign_id
