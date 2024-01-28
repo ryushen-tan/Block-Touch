@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import csv
-import copy
 import argparse
 import itertools
 from collections import Counter
@@ -14,7 +13,22 @@ import mediapipe as mp
 from utils import CvFpsCalc
 from model import KeyPointClassifier
 from model import PointHistoryClassifier
+import threading
 
+from ursina import *
+from ursina.prefabs.first_person_controller import FirstPersonController
+
+
+import copy
+
+handDetectionOpen = True
+previousDragCord: tuple = None
+playerRotation = None
+SENS = 0.75
+placeBlock = False
+
+def hand_detection():
+    main()
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -61,7 +75,7 @@ def main():
     mp_hands = mp.solutions.hands
     hands = mp_hands.Hands(
         static_image_mode=use_static_image_mode,
-        max_num_hands=1,
+        max_num_hands=2,
         min_detection_confidence=min_detection_confidence,
         min_tracking_confidence=min_tracking_confidence,
     )
@@ -102,7 +116,7 @@ def main():
     statusOTC = False
     statusCTO = False
 
-    while True:
+    while handDetectionOpen:
         fps = cvFpsCalc.get()
 
         # Process Key (ESC: end) #################################################
@@ -134,6 +148,7 @@ def main():
                 # Landmark calculation
                 landmark_list = calc_landmark_list(debug_image, hand_landmarks)
 
+
                 # Conversion to relative coordinates / normalized coordinates
                 pre_processed_landmark_list = pre_process_landmark(
                     landmark_list)
@@ -146,6 +161,9 @@ def main():
                 # Hand sign classification
                 hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
                 if hand_sign_id == 2:  # Point gesture
+                    if oldHand != hand_sign_id:
+                        global placeBlock
+                        placeBlock = True
                     point_history.append(landmark_list[8])
                 else:
                     point_history.append([0, 0])
@@ -155,24 +173,32 @@ def main():
                     statusOTC = False
                     statusCTO = False
 
+                global previousDragCord
                 # 0-open 1-close
                 if oldHand != hand_sign_id:
                     if oldHand == 0 and hand_sign_id == 1:
                         # print("open to close")
                         openToClose = (int(brect[0] + ((brect[2] - brect[0]) / 2)), int(brect[1] + ((brect[3] - brect[1]) / 2)))
+                        previousDragCord = None
                         # print(openToClose)
                         statusOTC = not statusOTC
                     elif oldHand == 1 and hand_sign_id == 0:
                         # print("close to open")
                         closeToOpen = (int(brect[0] + ((brect[2] - brect[0]) / 2)), int(brect[1] + ((brect[3] - brect[1]) / 2)))
+                        previousDragCord = None
                         # print(closeToOpen)
                         statusCTO = not statusCTO
 
                     oldHand = hand_sign_id
                 elif oldHand == 1 and oldHand == hand_sign_id:
                         # print("dragging")
+                        #MAIN CHANGES
                         dragging = (int(brect[0] + ((brect[2] - brect[0]) / 2)), int(brect[1] + ((brect[3] - brect[1]) / 2)))
-                        # print(dragging)
+                        global playerRotation
+                        if previousDragCord and playerRotation:
+                            playerRotation.y += int((dragging[0] - previousDragCord[0]) * SENS)
+                            playerRotation.x += int((dragging[1] - previousDragCord[1]) * SENS)
+                        previousDragCord = dragging
 
                 if statusOTC == False and statusCTO == True:
                     statusCTO = False
@@ -582,6 +608,66 @@ def draw_info(image, fps, mode, number):
                        cv.LINE_AA)
     return image
 
+t1 = threading.Thread(target=hand_detection, args=())
+t1.start()
 
-if __name__ == '__main__':
-    main()
+app = Ursina()
+
+class Voxel(Button):
+    def __init__(self, position=(0,0,0)):
+        super().__init__(
+            parent = scene,
+            position = position,
+            model = 'cube',
+            origin_y = .5,
+            texture = 'white_cube',
+            color = color.color(0, 0, random.uniform(.9, 1.0)),
+            highlight_color = color.lime,
+        )
+    
+    def input(self, key):
+        if key == 'q':
+            global handDetectionOpen
+            handDetectionOpen = False
+            t1.join()
+            app.quit()
+        if self.hovered:
+            if key == 'left mouse down':
+                voxel = Voxel(position=self.position + mouse.normal)
+            
+            if key == 'right mouse down':
+                destroy(self)
+            
+            global placeBlock
+            if placeBlock:
+                voxel = Voxel(position=self.position + mouse.normal)
+                placeBlock = False
+
+
+
+
+for z in range(20):
+    for(x) in range(20):
+        voxel = Voxel(position=(x - 10,0,z - 10))
+
+player = FirstPersonController()
+playerRotation = player.rotation
+
+def update():
+    global playerRotation
+    player.rotation_y  = playerRotation.y
+    player.camera_pivot.rotation_x = playerRotation.x
+
+    global placeBlock
+    if placeBlock:
+        
+
+    #player.rotation_x = 0
+    if player.position.y < -100:
+        print('player fell off map!')
+        global handDetectionOpen
+        handDetectionOpen = False
+        t1.join()
+        app.quit()
+
+app.run()
